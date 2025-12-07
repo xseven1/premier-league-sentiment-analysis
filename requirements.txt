@@ -1,0 +1,6 @@
+functions-framework==3.*
+google-cloud-language==2.*
+google-cloud-firestore==2.*
+requests==2.*
+beautifulsoup4==4.*
+feedparser==6.*
