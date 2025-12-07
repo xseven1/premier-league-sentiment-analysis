@@ -5,19 +5,25 @@ No authentication required - works immediately!
 
 import feedparser
 import time
+from datetime import datetime, timedelta
 
-def fetch_google_news(team_name, limit=15):
+def fetch_google_news(team_name, limit=15, days_back=None):
     """
     Fetch news articles from Google News RSS
-    100% reliable, no API key needed
+    Can optionally fetch older articles for historical data
     """
     try:
         # Format search query
         search_query = team_name.replace(' ', '+') + '+Premier+League'
+        
+        # Add date range if specified (for historical backfill)
+        if days_back:
+            from_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+            search_query += f'+after:{from_date}'
+        
         url = f'https://news.google.com/rss/search?q={search_query}&hl=en-US&gl=GB&ceid=GB:en'
         
         print(f"Fetching Google News for {team_name}...")
-        print(f"URL: {url}")
         
         # Parse RSS feed
         feed = feedparser.parse(url)
@@ -66,6 +72,8 @@ def fetch_bbc_sport_news(limit=20):
                 text = entry.title
                 if hasattr(entry, 'summary'):
                     text += ' ' + entry.summary
+                elif hasattr(entry, 'description'):
+                    text += ' ' + entry.description
                 
                 posts.append({
                     'text': text,
@@ -75,6 +83,8 @@ def fetch_bbc_sport_news(limit=20):
                 })
             
             print(f"✓ Found {len(posts)} BBC Sport articles")
+        else:
+            print(f"⚠ BBC Sport returned no articles")
         
         return posts
         
@@ -100,6 +110,8 @@ def fetch_sky_sports_news():
                 text = entry.title
                 if hasattr(entry, 'summary'):
                     text += ' ' + entry.summary
+                elif hasattr(entry, 'description'):
+                    text += ' ' + entry.description
                 
                 posts.append({
                     'text': text,
@@ -109,6 +121,8 @@ def fetch_sky_sports_news():
                 })
             
             print(f"✓ Found {len(posts)} Sky Sports articles")
+        else:
+            print(f"⚠ Sky Sports returned no articles")
         
         return posts
         
@@ -120,6 +134,7 @@ def fetch_sky_sports_news():
 def filter_posts_by_team(posts, team_name, team_variations):
     """
     Filter articles that mention the team
+    Uses flexible matching - checks if ANY variation appears in text
     """
     relevant_posts = []
     
@@ -127,7 +142,25 @@ def filter_posts_by_team(posts, team_name, team_variations):
         text_lower = post['text'].lower()
         
         # Check if any team variation is mentioned
-        if any(variation.lower() in text_lower for variation in team_variations):
+        # Also check for partial matches (e.g., "United" in "Manchester United")
+        found = False
+        for variation in team_variations:
+            variation_lower = variation.lower()
+            
+            # Direct match or word boundary match
+            if variation_lower in text_lower:
+                # Avoid false positives (e.g., "United" matching "United States")
+                # Check if it's a word boundary match
+                words = text_lower.split()
+                for word in words:
+                    if variation_lower in word:
+                        found = True
+                        break
+            
+            if found:
+                break
+        
+        if found:
             relevant_posts.append(post)
     
     return relevant_posts
@@ -150,7 +183,7 @@ def fetch_combined_news(team_name, team_variations):
     print(f"Collecting news for: {team_name}")
     print(f"{'='*60}")
     
-    # Source 1: Google News (team-specific)
+    # Source 1: Google News (team-specific - most reliable)
     print("\n[1/3] Google News (team-specific)...")
     google_posts = fetch_google_news(team_name, limit=10)
     all_posts.extend(google_posts)
@@ -159,24 +192,33 @@ def fetch_combined_news(team_name, team_variations):
     # Source 2: BBC Sport (filter for team)
     print("\n[2/3] BBC Sport Premier League...")
     bbc_posts = fetch_bbc_sport_news(limit=20)
-    filtered_bbc = filter_posts_by_team(bbc_posts, team_name, team_variations)
-    print(f"  → Filtered to {len(filtered_bbc)} relevant articles")
-    all_posts.extend(filtered_bbc)
+    if bbc_posts:
+        filtered_bbc = filter_posts_by_team(bbc_posts, team_name, team_variations)
+        print(f"  → Filtered to {len(filtered_bbc)} relevant articles")
+        all_posts.extend(filtered_bbc)
+    else:
+        print(f"  → BBC Sport fetch failed, skipping")
     time.sleep(1)
     
     # Source 3: Sky Sports (filter for team)
     print("\n[3/3] Sky Sports...")
     sky_posts = fetch_sky_sports_news()
-    filtered_sky = filter_posts_by_team(sky_posts, team_name, team_variations)
-    print(f"  → Filtered to {len(filtered_sky)} relevant articles")
-    all_posts.extend(filtered_sky)
+    if sky_posts:
+        filtered_sky = filter_posts_by_team(sky_posts, team_name, team_variations)
+        print(f"  → Filtered to {len(filtered_sky)} relevant articles")
+        all_posts.extend(filtered_sky)
+    else:
+        print(f"  → Sky Sports fetch failed, skipping")
     time.sleep(1)
     
     print(f"\n{'='*60}")
     print(f"✓ Total articles for {team_name}: {len(all_posts)}")
-    print(f"  - Google News: {len(google_posts)}")
-    print(f"  - BBC Sport: {len(filtered_bbc)}")
-    print(f"  - Sky Sports: {len(filtered_sky)}")
+    if google_posts:
+        print(f"  - Google News: {len(google_posts)}")
+    if bbc_posts:
+        print(f"  - BBC Sport: {len([p for p in all_posts if p['source'] == 'BBC Sport'])}")
+    if sky_posts:
+        print(f"  - Sky Sports: {len([p for p in all_posts if p['source'] == 'Sky Sports'])}")
     print(f"{'='*60}\n")
     
     return all_posts

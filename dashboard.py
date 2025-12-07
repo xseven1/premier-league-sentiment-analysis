@@ -180,35 +180,80 @@ try:
     
     # === TEAM COMPARISON ===
     st.subheader("📈 Team Sentiment Trends")
-    
+
     all_teams = sorted(df['team'].unique())
     default_teams = latest_sentiment.head(6)['team'].tolist()
-    
+
     selected_teams = st.multiselect(
         "Select teams to compare",
         options=all_teams,
         default=default_teams
     )
-    
+
     if selected_teams:
         team_df = df[df['team'].isin(selected_teams)].copy()
+        team_df['timestamp'] = pd.to_datetime(team_df['timestamp'])
         team_df = team_df.sort_values('timestamp')
         
-        fig_line = px.line(
-            team_df,
-            x='timestamp',
-            y='avg_sentiment',
-            color='team',
-            title='Sentiment Over Time',
-            labels={'avg_sentiment': 'Sentiment Score', 'timestamp': 'Date'},
-            markers=True
-        )
+        # Check if we have enough data points
+        unique_times = team_df['timestamp'].nunique()
         
-        fig_line.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.3)
-        fig_line.update_layout(height=500)
-        
-        st.plotly_chart(fig_line, use_container_width=True)
-    
+        if unique_times < 2:
+            st.warning(f"⚠️ Only {unique_times} data point available. Need at least 2 time periods to show trends.")
+            st.info("""
+            **To see trend charts:**
+            - Wait 12 hours for the next scheduled run
+            - Or manually trigger the function again: `Invoke-WebRequest -Uri "YOUR_URL"`
+            - Need at least 2-3 data collections from different times
+            """)
+            
+            # Show current values instead
+            st.subheader("Current Sentiment Values")
+            current_df = team_df.groupby('team')['avg_sentiment'].last().reset_index()
+            current_df = current_df.sort_values('avg_sentiment', ascending=False)
+            
+            fig_bar = px.bar(
+                current_df,
+                x='team',
+                y='avg_sentiment',
+                color='avg_sentiment',
+                color_continuous_scale=['red', 'yellow', 'green'],
+                title='Current Sentiment Scores'
+            )
+            fig_bar.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.5)
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+        else:
+            # Show trend line chart
+            fig_line = px.line(
+                team_df,
+                x='timestamp',
+                y='avg_sentiment',
+                color='team',
+                title=f'Sentiment Over Time ({unique_times} data points)',
+                labels={'avg_sentiment': 'Sentiment Score', 'timestamp': 'Time'},
+                markers=True
+            )
+            
+            # Format x-axis based on data span
+            time_span = (team_df['timestamp'].max() - team_df['timestamp'].min()).total_seconds()
+            
+            if time_span < 86400:  # Less than 1 day - show hours
+                fig_line.update_xaxes(tickformat='%I:%M %p')
+            elif time_span < 604800:  # Less than 1 week - show days
+                fig_line.update_xaxes(tickformat='%b %d')
+            else:  # More than 1 week - show dates
+                fig_line.update_xaxes(tickformat='%b %d')
+            
+            fig_line.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.3, annotation_text="Neutral")
+            fig_line.update_layout(
+                height=500,
+                hovermode='x unified',
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+            )
+            
+            st.plotly_chart(fig_line, use_container_width=True)
+
     st.markdown("---")
     
     # === KEY TOPICS ===
