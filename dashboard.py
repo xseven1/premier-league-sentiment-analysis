@@ -4,14 +4,11 @@ Streamlit Dashboard for Premier League Media Sentiment Tracker
 
 import streamlit as st
 from google.cloud import firestore
+from google.oauth2 import service_account
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import os
-
-# Set up credentials
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'gcp-credentials.json'
 
 # Page config
 st.set_page_config(
@@ -46,10 +43,24 @@ st.markdown(
 st.markdown('<p class="subheader">Real-time analysis from Google News, BBC Sport & Sky Sports</p>', unsafe_allow_html=True)
 st.markdown("---")
 
-# Connect to Firestore
+# Connect to Firestore using Streamlit secrets
 @st.cache_resource
 def get_db():
-    return firestore.Client()
+    """Initialize Firestore client with credentials from Streamlit secrets"""
+    try:
+        # Load credentials from Streamlit secrets (TOML format)
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"]
+        )
+        
+        # Initialize Firestore client WITH the credentials
+        return firestore.Client(
+            credentials=credentials, 
+            project=st.secrets["gcp_service_account"]["project_id"]
+        )
+    except Exception as e:
+        st.error(f"Failed to initialize Firestore: {e}")
+        raise
 
 db = get_db()
 
@@ -458,7 +469,7 @@ except Exception as e:
     st.error(f"❌ Error loading data: {e}")
     st.info("""
     **Troubleshooting:**
-    - Make sure your `gcp-credentials.json` file is in the same folder as this script
+    - Make sure your GCP credentials are properly set in Streamlit Secrets
     - Verify your Firestore database is set up correctly
     - Check that the Cloud Function has run at least once
     """)
