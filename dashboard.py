@@ -39,7 +39,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header
-st.markdown('<p class="main-header">⚽ Premier League Media Sentiment Tracker</p>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="main-header" style="color:white; font-size:50px; font-weight:bold;">⚽ Premier League Media Sentiment Tracker</p>',
+    unsafe_allow_html=True
+)
 st.markdown('<p class="subheader">Real-time analysis from Google News, BBC Sport & Sky Sports</p>', unsafe_allow_html=True)
 st.markdown("---")
 
